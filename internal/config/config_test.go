@@ -4,7 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
+
+type Entry struct {
+	name string
+	yamlContent string
+	wantErr bool
+	want *Config
+}
 
 func TestParseConfig(t *testing.T) {
 	var serverYML = `
@@ -33,89 +42,70 @@ server:
       value: "$ip"
 `
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yml")
-	err := os.WriteFile(path, []byte(serverYML), 0644)
+	var malformedServerYML = `
+server:
+  listen: "8080"
+  workers: "4"
+`
 
-	if err != nil {
-		t.Fatalf("[TEST] failed to write temp config: %v", err)
+
+	entries := []Entry{
+		{
+			name:        "valid full config",
+			yamlContent: serverYML,
+			wantErr:     false,
+			want: &Config{
+				Server: ServerConfig{
+					Listen:  8080,
+					Workers: 4,
+					Upstreams: []UpstreamConfig{
+						{ID: "node1", URL: "http://localhost:8000"},
+						{ID: "node2", URL: "http://localhost:8001"},
+					},
+					Paths: []PathConfig{
+						{Path: "/", Upstreams: []string{"node1", "node2"}},
+						{Path: "/admin/*", Upstreams: []string{"node2"}},
+					},
+					Headers: []HeaderConfig{
+						{Key: "X-Forwarded-For", Value: "$ip"},
+					},
+				},
+			},
+		},
+		{
+			name:        "malformed config",
+			yamlContent: malformedServerYML,
+			wantErr:     true,
+			want: nil,
+		},
 	}
 
-	cfg, err := ParseConfig(path)
+	for _, entry := range entries {
+		t.Run(entry.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "config.yml")
+			err := os.WriteFile(path, []byte(entry.yamlContent), 0644)
 
-	if err != nil {
-		t.Fatalf("[TEST] failed to parse config file: %v", err)
-	}
+			if err != nil {
+				t.Fatalf("[TEST] failed to write temp config: %v", err)
+			}
 
-	if cfg.Server.Listen != 8080 {
-		t.Errorf("got %d, want %d", cfg.Server.Listen, 8080)
-	}
+			cfg, err := ParseConfig(path)
 
-	if cfg.Server.Workers != 4 {
-		t.Errorf("got %d, want %d", cfg.Server.Workers, 4)
-	}
+			if entry.wantErr {
+				if err == nil {
+					t.Errorf("Expected error, got none")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("[TEST] failed to parse config file: %v", err)
+				}
 
-	if len(cfg.Server.Upstreams) != 2 {
-		t.Fatalf("got %d, want %d", len(cfg.Server.Upstreams), 2)
-	}
-
-	if cfg.Server.Upstreams[0].ID != "node1" {
-		t.Errorf("got %s, want %s", cfg.Server.Upstreams[0].ID, "node1")
-	}
-
-	if cfg.Server.Upstreams[0].URL != "http://localhost:8000" {
-		t.Errorf("got %s, want %s", cfg.Server.Upstreams[0].URL, "http://localhost:8000")
-	}
-
-	if cfg.Server.Upstreams[1].ID != "node2" {
-		t.Errorf("got %s, want %s", cfg.Server.Upstreams[1].ID, "node2")
-	}
-
-	if cfg.Server.Upstreams[1].URL != "http://localhost:8001" {
-		t.Errorf("got %s, want %s", cfg.Server.Upstreams[1].URL, "http://localhost:8001")
-	}
-
-	if len(cfg.Server.Paths) != 2 {
-		t.Fatalf("got %d, want %d", len(cfg.Server.Paths), 2)
-	}
-
-	if cfg.Server.Paths[0].Path != "/" {
-		t.Errorf("got %s, want %s", cfg.Server.Paths[0].Path, "/")
-	}
-
-	if len(cfg.Server.Paths[0].Upstreams) != 2 {
-		t.Fatalf("got %d, want %d", len(cfg.Server.Paths[0].Upstreams), 2)
-	}
-
-	if cfg.Server.Paths[0].Upstreams[0] != "node1" {
-		t.Errorf("got %s, want %s", cfg.Server.Paths[0].Upstreams[0], "node1")
-	}
-
-	if cfg.Server.Paths[0].Upstreams[1] != "node2" {
-		t.Errorf("got %s, want %s", cfg.Server.Paths[0].Upstreams[1], "node2")
-	}
-
-	if cfg.Server.Paths[1].Path != "/admin/*" {
-		t.Errorf("got %s, want %s", cfg.Server.Paths[1].Path, "/admin/*")
-	}
-
-	if len(cfg.Server.Paths[1].Upstreams) != 1 {
-		t.Fatalf("got %d, want %d", len(cfg.Server.Paths[1].Upstreams), 1)
-	}
-
-	if cfg.Server.Paths[1].Upstreams[0] != "node2" {
-		t.Errorf("got %s, want %s", cfg.Server.Paths[1].Upstreams[0], "node2")
-	}
-
-	if len(cfg.Server.Headers) != 1 {
-		t.Fatalf("got %d, want %d", len(cfg.Server.Headers), 1)
-	}
-
-	if cfg.Server.Headers[0].Key != "X-Forwarded-For"{
-		t.Errorf("got %s, want %s", cfg.Server.Headers[0].Key, "X-Forwarded-For")
-	}
-
-	if cfg.Server.Headers[0].Value != "$ip"{
-		t.Errorf("got %s, want %s", cfg.Server.Headers[0].Value, "$ip")
+				diff := cmp.Diff(entry.want, cfg)
+				if diff != "" {
+					t.Errorf("mismatch (-want +got):\n%s", diff)
+				}
+			}
+		})
 	}
 }
