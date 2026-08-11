@@ -2,12 +2,16 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 
 	"github.com/hasanm95/go-nx/internal/config"
+	"golang.org/x/sys/unix"
 )
 
 type FlagVars struct {
@@ -74,6 +78,57 @@ func main() {
 		}
 	} else {
 		log.Print("Running as worker")
+		fd, err := unix.Socket(unix.AF_INET, unix.SOCK_STREAM, 0)
+		if err != nil {
+			log.Fatalf("failed to crate socket: %v", err)
+		}
+		defer unix.Close(fd) 
+		err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
+		if err != nil {
+			log.Fatalf("Failed to apply socket configuration: %v", err)
+		}
+		
+		addr := &unix.SockaddrInet4{Port: cfg.Server.Listen}
+		copy(addr.Addr[:], []byte{127, 0, 0, 1})
+
+		err = unix.Bind(fd, addr)
+		if err != nil {
+			log.Fatalf("Failed to bind socket: %v", err)
+		}
+
+		err = unix.Listen(fd, 128)
+		if err != nil {
+			log.Fatalf("Failed to listen: %v", err)
+		}
+
+		fmt.Println("Raw socket listening on 127.0.0.1:8080...")
+
+		f := os.NewFile(uintptr(fd), "gonx-listener")
+		ln, err := net.FileListener(f)
+
+		if err != nil {
+			log.Fatalf("Failed to listen fd: %v", err)
+		}
+
+		f.Close()
+
+		handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Fetch the current process ID dynamically on every request
+			pid := os.Getpid()
+			
+			// Write the plain text string response back to the client
+			responseString := fmt.Sprintf("hello from worker, pid %d\n", pid)
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(responseString))
+		})
+
+		log.Printf("[PID: %d] Starting HTTP server on reused port...", os.Getpid())
+
+		err = http.Serve(ln, handlerFunc)
+		if err != nil {
+			log.Fatalf("Server stopped unexpectedly: %v", err)
+		}
 	}
 
 	log.Printf("%+v", cfg)
