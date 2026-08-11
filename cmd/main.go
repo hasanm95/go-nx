@@ -82,14 +82,14 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to crate socket: %v", err)
 		}
-		defer unix.Close(fd) 
+		
 		err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEPORT, 1)
 		if err != nil {
 			log.Fatalf("Failed to apply socket configuration: %v", err)
 		}
 		
 		addr := &unix.SockaddrInet4{Port: cfg.Server.Listen}
-		copy(addr.Addr[:], []byte{127, 0, 0, 1})
+		// copy(addr.Addr[:], []byte{127, 0, 0, 1})
 
 		err = unix.Bind(fd, addr)
 		if err != nil {

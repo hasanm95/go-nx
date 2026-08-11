@@ -1,0 +1,15 @@
+# Adjust the Go version tag to match your go.mod's `go` directive
+FROM golang:1.25.3
+
+WORKDIR /app
+
+RUN go install github.com/air-verse/air@v1.61.7
+
+COPY go.mod go.su[m] ./
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["air", "-c", ".air.toml"]

@@ -1,0 +1,13 @@
+services:
+  gonx:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+
+volumes:
+  go-mod-cache:
