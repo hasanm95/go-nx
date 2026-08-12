@@ -91,6 +91,15 @@ func TestMatchPath(t *testing.T) {
 			wantMatch:     &config.PathConfig{Path: "/admin/settings", Upstreams: []string{"node-exact"}},
 		},
 		{
+			name: "prefix rule does not match the bare prefix without trailing slash",
+			paths: []config.PathConfig{
+				{Path: "/admin/*", Upstreams: []string{"node1"}},
+			},
+			requestedPath: "/admin",
+			wantOk:        false,
+			wantMatch:     nil,
+		},
+		{
 			name: "longest prefix wins, shorter listed first",
 			paths: []config.PathConfig{
 				{Path: "/api/*", Upstreams: []string{"node-general"}},
