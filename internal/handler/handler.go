@@ -22,8 +22,6 @@ func NewHandler(cfg *config.Config, selectors map[string]func() string) http.Han
 
 		selectNext, ok := selectors[match.Path]
 		if !ok {
-			// Shouldn't happen if selectors were built from this same cfg.Server.Paths —
-			// guarded rather than assumed, so a mismatch fails loudly instead of panicking.
 			http.Error(w, fmt.Sprintf("no selector configured for rule: %s", match.Path), http.StatusInternalServerError)
 			return
 		}
