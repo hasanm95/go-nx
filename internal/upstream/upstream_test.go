@@ -51,7 +51,7 @@ type LookupEntry struct {
 	selected string
 	upstreams []config.UpstreamConfig
 	expected LookupExpected
-	wantErr bool
+	wantOk bool
 }
 
 func TestLookup(t *testing.T) {
@@ -82,7 +82,7 @@ func TestLookup(t *testing.T) {
 				ok: true,
 				value: "http://localhost:9002",
 			},
-			wantErr: false,
+			wantOk: true,
 		},
 		{
 			name: "Unknown selected",
@@ -92,21 +92,21 @@ func TestLookup(t *testing.T) {
 				ok: false,
 				value: "",
 			},
-			wantErr: true,
+			wantOk: false,
 		},
 	}
 
 	for _, entry := range entries{
 		t.Run(entry.name, func(t *testing.T) {
-			url, _ := Lookup(entry.selected, upstreams)
+			url, ok := Lookup(entry.selected, upstreams)
 
-			if entry.wantErr == false {
+			if ok != entry.wantOk {
+				t.Fatalf("got ok=%v, want ok=%v", ok, entry.wantOk)
+			}
+
+			if entry.wantOk {
 				if url != entry.expected.value {
 					t.Errorf("exprected %s', got %s", entry.expected.value, url)
-				}
-			} else {
-				if url != "" {
-					t.Errorf("expected empty string for empty selected, got %s", url)
 				}
 			}
 		})
