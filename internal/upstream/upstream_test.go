@@ -1,6 +1,8 @@
 package upstream
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/hasanm95/go-nx/internal/config"
@@ -38,6 +40,49 @@ func TestSelector_Empty(t *testing.T) {
 
 	if got := nextItem(); got != "" {
 		t.Errorf("expected empty string for zero-slice, got %s", got)
+	}
+}
+
+func TestSelector_Concurrency(t *testing.T) {
+	sel := Selector([]string{"node1", "node2"})
+
+	var wg sync.WaitGroup
+
+	var node1Count atomic.Int64
+	var node2Count atomic.Int64
+	var invalidCount atomic.Int64
+
+	const totalCalls = 100
+
+	wg.Add(totalCalls)
+
+	for i := 0; i < totalCalls; i++ {
+		go func() {
+			defer wg.Done()
+
+			switch sel() {
+			case "node1":
+				node1Count.Add(1)
+			case "node2":
+				node2Count.Add(1)
+			default:
+				invalidCount.Add(1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if invalidCount.Load() != 0 {
+		t.Fatalf("got %d invalid selections", invalidCount.Load())
+	}
+
+	if node1Count.Load() != 50 {
+		t.Errorf("node1: got %d selections, want 50", node1Count.Load())
+	}
+
+	if node2Count.Load() != 50 {
+		t.Errorf("node2: got %d selections, want 50", node2Count.Load())
 	}
 }
 
