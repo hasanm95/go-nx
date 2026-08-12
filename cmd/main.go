@@ -11,6 +11,7 @@ import (
 	"runtime"
 
 	"github.com/hasanm95/go-nx/internal/config"
+	"github.com/hasanm95/go-nx/internal/handler"
 	"golang.org/x/sys/unix"
 )
 
@@ -112,20 +113,9 @@ func main() {
 
 		f.Close()
 
-		handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Fetch the current process ID dynamically on every request
-			pid := os.Getpid()
-			
-			// Write the plain text string response back to the client
-			responseString := fmt.Sprintf("hello from worker, pid %d\n", pid)
-			w.Header().Set("Content-Type", "text/plain")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(responseString))
-		})
-
 		log.Printf("[PID: %d] Starting HTTP server on reused port...", os.Getpid())
 
-		err = http.Serve(ln, handlerFunc)
+		err = http.Serve(ln, handler.NewHandler(cfg))
 		if err != nil {
 			log.Fatalf("Server stopped unexpectedly: %v", err)
 		}
