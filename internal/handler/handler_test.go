@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/hasanm95/go-nx/internal/config"
+	"github.com/hasanm95/go-nx/internal/upstream"
 )
 
 func validConfig() *config.Config {
@@ -24,51 +25,46 @@ func validConfig() *config.Config {
 }
 
 type HandlerEntry struct {
-	name string
-	cfg *config.Config
+	name          string
+	cfg           *config.Config
 	requestedPath string
-	expectedCode int
-	expectedBody string
+	expectedCode  int
+	expectedBody  string
 }
 
 func TestNewHandler(t *testing.T) {
-
 	entries := []HandlerEntry{
 		{
-			name: "Sucess response",
-			cfg: validConfig(),
+			name:          "Success response",
+			cfg:           validConfig(),
 			requestedPath: "/",
-			expectedCode: 200,
-			expectedBody: "matched rule: /, upstreams: [node1]",
+			expectedCode:  200,
+			expectedBody:  "matched rule: /, selected upstream: node1 -> http://localhost:8000",
 		},
 		{
-			name: "Failed response",
-			cfg: validConfig(),
+			name:          "Failed response",
+			cfg:           validConfig(),
 			requestedPath: "/admin",
-			expectedCode: 404,
-			expectedBody: "no rule matched path: /admin",
+			expectedCode:  404,
+			expectedBody:  "no rule matched path: /admin",
 		},
 		{
-			name: "Prefix path",
-			cfg: validConfig(),
+			name:          "Prefix path",
+			cfg:           validConfig(),
 			requestedPath: "/api/v1/user",
-			expectedCode: 200,
-			expectedBody: "matched rule: /api/v1/*, upstreams: [node1 node2]",
+			expectedCode:  200,
+			expectedBody:  "matched rule: /api/v1/*, selected upstream: node1 -> http://localhost:8000",
 		},
 	}
 
 	for _, entry := range entries {
 		t.Run(entry.name, func(t *testing.T) {
-			cfg := entry.cfg
-			handler := NewHandler(cfg)
+			selectors := upstream.BuildSelectors(entry.cfg.Server.Paths)
+			handler := NewHandler(entry.cfg, selectors)
 
-			// 1. Create a MOCK http request
 			req := httptest.NewRequest(http.MethodGet, entry.requestedPath, nil)
-
-			// 2. Create a response recorder to capture the handler's output
 			res := httptest.NewRecorder()
 
-			// 3. Invoke the handler function
 			handler(res, req)
 
 			if res.Code != entry.expectedCode {

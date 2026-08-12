@@ -28,3 +28,13 @@ func Lookup(selected string, Upstreams []config.UpstreamConfig) (value string, o
 	}
 	return "", false
 }
+
+func BuildSelectors(paths []config.PathConfig) map[string]func() string {
+	selectors := make(map[string]func() string, len(paths))
+
+	for _, path := range paths {
+		selectors[path.Path] = Selector(path.Upstreams)
+	}
+
+	return selectors
+}
