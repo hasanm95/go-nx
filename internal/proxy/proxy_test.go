@@ -3,11 +3,13 @@ package proxy
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -188,6 +190,115 @@ func TestForward_HopByHopHeaders(t *testing.T){
 	_, _ = proxy.Forward(mockServer.URL, req)
 }
 
+func TestForward_XForwardedFor(t *testing.T) {
+	proxy := NewProxy()
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Forwarded-For")
+
+		if got != "192.168.1.20" {
+			t.Errorf("expected X-Forwarded-For '192.168.1.20', got %q", got)
+		}
+	}))
+	defer mockServer.Close()
+
+	req := httptest.NewRequest("GET", "/users", nil)
+	req.RemoteAddr = "192.168.1.20:54321"
+
+	_, err := proxy.Forward(mockServer.URL, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestForward_XForwardedFor_Append(t *testing.T) {
+	proxy := NewProxy()
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Forwarded-For")
+
+		expected := "10.0.0.5, 192.168.1.20"
+
+		if got != expected {
+			t.Errorf("expected X-Forwarded-For %q, got %q", expected, got)
+		}
+	}))
+	defer mockServer.Close()
+
+	req := httptest.NewRequest("GET", "/users", nil)
+	req.RemoteAddr = "192.168.1.20:54321"
+	req.Header.Set("X-Forwarded-For", "10.0.0.5")
+
+	_, err := proxy.Forward(mockServer.URL, req)
+
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestForward_XForwardedProto_HTTP(t *testing.T) {
+	proxy := NewProxy()
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Forwarded-Proto")
+
+		if got != "http" {
+			t.Errorf("expected X-Forwarded-Proto 'http', got %q", got)
+		}
+	}))
+	defer mockServer.Close()
+
+	req := httptest.NewRequest("GET", "/users", nil)
+
+	_, err := proxy.Forward(mockServer.URL, req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestForward_XForwardedProto_HTTPS(t *testing.T) {
+	proxy := NewProxy()
+
+	mockUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Forwarded-Proto")
+
+		if got != "https" {
+			t.Errorf("expected X-Forwarded-Proto 'https', got %q", got)
+		}
+	}))
+	defer mockUpstream.Close()
+
+	req := httptest.NewRequest("GET", "https://example.com/users", nil)
+	req.TLS = &tls.ConnectionState{}
+
+	_, err := proxy.Forward(mockUpstream.URL, req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
+func TestForward_XForwardedHost(t *testing.T) {
+	proxy := NewProxy()
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.Header.Get("X-Forwarded-Host")
+
+		if got != "example.com" {
+			t.Errorf("expected X-Forwarded-Host 'example.com', got %q", got)
+		}
+	}))
+	defer mockServer.Close()
+
+	req := httptest.NewRequest("GET", "/users", nil)
+	req.Host = "example.com"
+
+	_, err := proxy.Forward(mockServer.URL, req)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+}
+
 func TestRelay_Success(t *testing.T) {
 	proxy := NewProxy()
 
@@ -217,5 +328,36 @@ func TestRelay_Success(t *testing.T) {
 
 	if rec.Body.String() != `{"status":"success"}` {
 		t.Errorf("expected body '{\"status\":\"success\"}', got '%s'", rec.Body.String())
+	}
+}
+func TestRelay_HopByHopHeaders(t *testing.T) {
+	proxy := NewProxy()
+	rec := httptest.NewRecorder()
+
+	mockResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(`{"status":"success"}`)),
+	}
+
+	mockResp.Header.Set("Connection", "keep-alive")
+	mockResp.Header.Set("X-Test-Header", "hello")
+
+	proxy.Relay(rec, mockResp)
+
+	if got := rec.Header().Get("Connection"); got != "" {
+		t.Errorf("expected Connection header to be removed, got %q", got)
+	}
+
+	if got := rec.Header().Get("X-Test-Header"); got != "hello" {
+		t.Errorf("expected X-Test-Header to be forwarded, got %q", got)
+	}
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	if rec.Body.String() != `{"status":"success"}` {
+		t.Errorf("expected body %q, got %q", `{"status":"success"}`, rec.Body.String())
 	}
 }

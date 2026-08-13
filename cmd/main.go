@@ -12,6 +12,7 @@ import (
 
 	"github.com/hasanm95/go-nx/internal/config"
 	"github.com/hasanm95/go-nx/internal/handler"
+	"github.com/hasanm95/go-nx/internal/proxy"
 	"github.com/hasanm95/go-nx/internal/upstream"
 	"golang.org/x/sys/unix"
 )
@@ -117,8 +118,9 @@ func main() {
 		log.Printf("[PID: %d] Starting HTTP server on reused port...", os.Getpid())
 
 		selectors := upstream.BuildSelectors(cfg.Server.Paths)
+		p := proxy.NewProxy()
 
-		err = http.Serve(ln, handler.NewHandler(cfg, selectors))
+		err = http.Serve(ln, handler.NewHandler(cfg, selectors, p))
 		if err != nil {
 			log.Fatalf("Server stopped unexpectedly: %v", err)
 		}

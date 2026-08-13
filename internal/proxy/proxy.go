@@ -3,6 +3,7 @@ package proxy
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"slices"
 	"strings"
@@ -17,9 +18,9 @@ func NewProxy() *Proxy {
 	return &Proxy{
 		Client: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConns: 100,
+				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 10,
-				IdleConnTimeout: 90 * time.Second,
+				IdleConnTimeout:     90 * time.Second,
 			},
 		},
 	}
@@ -36,7 +37,7 @@ var hopByHopHeaders = map[string]struct{}{
 	"upgrade":             {},
 }
 
-func copyHeaders(dst, src http.Header) {
+func copyFilteredHeaders(dst, src http.Header) {
 	connHeader := src.Get("Connection")
 
 	connHeaders := strings.Split(connHeader, ",")
@@ -65,8 +66,31 @@ func copyHeaders(dst, src http.Header) {
 	}
 }
 
+func addForwardedHeaders(req *http.Request, original *http.Request) {
+	clientIP, _, err := net.SplitHostPort(original.RemoteAddr)
+	if err != nil {
+		clientIP = original.RemoteAddr
+	}
+
+	existing := original.Header.Get("X-Forwarded-For")
+
+	if existing != "" {
+		req.Header.Set("X-Forwarded-For", existing+", "+clientIP)
+	} else {
+		req.Header.Set("X-Forwarded-For", clientIP)
+	}
+
+	proto := "http"
+	if original.TLS != nil {
+		proto = "https"
+	}
+
+	req.Header.Set("X-Forwarded-Proto", proto)
+	req.Header.Set("X-Forwarded-Host", original.Host)
+}
+
 func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
-	targetURL := upstreamURL + r.URL.Path
+	targetURL := strings.TrimSuffix(upstreamURL, "/") + r.URL.Path
 
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
@@ -83,22 +107,19 @@ func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, er
 		return nil, fmt.Errorf("failed create new request: %w", err)
 	}
 
-	copyHeaders(req.Header, r.Header)
+	req.ContentLength = r.ContentLength
+
+	copyFilteredHeaders(req.Header, r.Header)
 	req.Host = r.Host
+	addForwardedHeaders(req, r)
 
-	response, err := p.Client.Do(req)
-
-	return response, err
+	return p.Client.Do(req)
 }
 
 func (p *Proxy) Relay(w http.ResponseWriter, resp *http.Response) {
 	defer resp.Body.Close()
 
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
+	copyFilteredHeaders(w.Header(), resp.Header)
 
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(w, resp.Body)

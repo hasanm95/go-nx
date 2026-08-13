@@ -1,79 +1,92 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/hasanm95/go-nx/internal/config"
+	"github.com/hasanm95/go-nx/internal/proxy"
 	"github.com/hasanm95/go-nx/internal/upstream"
 )
 
-func validConfig() *config.Config {
-	return &config.Config{
+func TestNewHandler_ProxiesSuccessfully(t *testing.T) {
+	mockUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			t.Errorf("expected path /, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("hello from upstream"))
+	}))
+	defer mockUpstream.Close()
+
+	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Upstreams: []config.UpstreamConfig{
-				{ID: "node1", URL: "http://localhost:8000"},
-				{ID: "node2", URL: "http://localhost:8000/api/v1/user"},
+				{ID: "node1", URL: mockUpstream.URL},
 			},
 			Paths: []config.PathConfig{
 				{Path: "/", Upstreams: []string{"node1"}},
-				{Path: "/api/v1/*", Upstreams: []string{"node1", "node2"}},
 			},
 		},
 	}
+
+	h := NewHandler(cfg, upstream.BuildSelectors(cfg.Server.Paths), proxy.NewProxy())
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	res := httptest.NewRecorder()
+	h(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", res.Code)
+	}
+
+	body, _ := io.ReadAll(res.Body)
+	if string(body) != "hello from upstream" {
+		t.Errorf("expected body %q, got %q", "hello from upstream", string(body))
+	}
 }
 
-type HandlerEntry struct {
-	name          string
-	cfg           *config.Config
-	requestedPath string
-	expectedCode  int
-	expectedBody  string
-}
-
-func TestNewHandler(t *testing.T) {
-	entries := []HandlerEntry{
-		{
-			name:          "Success response",
-			cfg:           validConfig(),
-			requestedPath: "/",
-			expectedCode:  200,
-			expectedBody:  "matched rule: /, selected upstream: node1 -> http://localhost:8000",
-		},
-		{
-			name:          "Failed response",
-			cfg:           validConfig(),
-			requestedPath: "/admin",
-			expectedCode:  404,
-			expectedBody:  "no rule matched path: /admin",
-		},
-		{
-			name:          "Prefix path",
-			cfg:           validConfig(),
-			requestedPath: "/api/v1/user",
-			expectedCode:  200,
-			expectedBody:  "matched rule: /api/v1/*, selected upstream: node1 -> http://localhost:8000",
+func TestNewHandler_NoRuleMatched(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Paths: []config.PathConfig{
+				{Path: "/", Upstreams: []string{"node1"}},
+			},
 		},
 	}
 
-	for _, entry := range entries {
-		t.Run(entry.name, func(t *testing.T) {
-			selectors := upstream.BuildSelectors(entry.cfg.Server.Paths)
-			handler := NewHandler(entry.cfg, selectors)
+	h := NewHandler(cfg, upstream.BuildSelectors(cfg.Server.Paths), proxy.NewProxy())
 
-			req := httptest.NewRequest(http.MethodGet, entry.requestedPath, nil)
-			res := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
+	res := httptest.NewRecorder()
+	h(res, req)
 
-			handler(res, req)
+	if res.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", res.Code)
+	}
+}
 
-			if res.Code != entry.expectedCode {
-				t.Errorf("expected %d, got %d", entry.expectedCode, res.Code)
-			}
+func TestNewHandler_UpstreamUnreachable(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Upstreams: []config.UpstreamConfig{
+				{ID: "node1", URL: "http://this-domain-does-not-exist-at-all-12345.xyz"},
+			},
+			Paths: []config.PathConfig{
+				{Path: "/", Upstreams: []string{"node1"}},
+			},
+		},
+	}
 
-			if res.Body.String() != entry.expectedBody {
-				t.Errorf("expected %s, got %s", entry.expectedBody, res.Body.String())
-			}
-		})
+	h := NewHandler(cfg, upstream.BuildSelectors(cfg.Server.Paths), proxy.NewProxy())
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	res := httptest.NewRecorder()
+	h(res, req)
+
+	if res.Code != http.StatusBadGateway {
+		t.Errorf("expected 502, got %d", res.Code)
 	}
 }

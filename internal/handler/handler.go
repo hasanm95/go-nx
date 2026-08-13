@@ -10,7 +10,7 @@ import (
 	"github.com/hasanm95/go-nx/internal/upstream"
 )
 
-func NewHandler(cfg *config.Config, selectors map[string]func() string) http.HandlerFunc {
+func NewHandler(cfg *config.Config, selectors map[string]func() string, p *proxy.Proxy) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		requestedPath := r.URL.Path
 		match, ok := matcher.MatchPath(cfg.Server.Paths, requestedPath)
@@ -29,20 +29,17 @@ func NewHandler(cfg *config.Config, selectors map[string]func() string) http.Han
 
 		selectedID := selectNext()
 		upstreamURL, ok := upstream.Lookup(selectedID, cfg.Server.Upstreams)
-
-		if !ok && upstreamURL == "" {
+		if !ok {
 			http.Error(w, fmt.Sprintf("no upstream found for id: %s", selectedID), http.StatusInternalServerError)
 			return
 		}
 
-		p := proxy.NewProxy()
-
-		response, err := p.Forward(upstreamURL, r)
-
+		resp, err := p.Forward(upstreamURL, r)
 		if err != nil {
-			fmt.Sprintf("got error from upstream: %v", err)
+			http.Error(w, fmt.Sprintf("failed to reach upstream: %v", err), http.StatusBadGateway)
+			return
 		}
 
-		p.Relay(w, response)
+		p.Relay(w, resp)
 	}
 }
