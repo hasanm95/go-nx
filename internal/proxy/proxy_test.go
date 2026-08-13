@@ -157,17 +157,31 @@ func TestForward_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestForward_HopByHopHeaders(t *testing.T){
+	proxy := NewProxy()
 
+	mockServer := httptest.NewServer(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request)  {
+		if r.Header.Get("Connection") != "" {
+			t.Errorf("expected Connection header to be removed")
+		}
 
+		if r.Header.Get("X-Internal") != "" {
+			t.Errorf("expected X-Internal to be removed")
+		}
 
+		if r.Header.Get("X-Test-Header") != "hello" {
+			t.Errorf("expected X-Test-Header to be forwarded")
+		}
+	}))
+	defer mockServer.Close() 
 
+	req := httptest.NewRequest("GET", "/users", nil)
+	req.Header.Add("Connection", "keep-alive, X-Internal")
+	req.Header.Add("X-Test-Header", "hello")
+	req.Header.Add("X-Internal", "secret")
 
-
-
-
-
-
-
+	_, _ = proxy.Forward(mockServer.URL, req)
+}
 
 func TestRelay_Success(t *testing.T) {
 	proxy := NewProxy()
