@@ -21,6 +21,11 @@ func TestForward_GETSuccess(t *testing.T){
 			t.Errorf("expected path /users, got %s", r.URL.Path)
 		}
 
+		pageQuery := r.URL.Query().Get("page") 
+		if pageQuery != "2" {
+			t.Errorf("expected 'page' query 2, got %s", pageQuery)
+		}
+
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "bearer 12345" {
 			t.Errorf("expected 'Authorization' header 'bearer 12345', got %s", authHeader)
@@ -31,11 +36,10 @@ func TestForward_GETSuccess(t *testing.T){
 	}))
 	defer mockServer.Close() 
 
-	req := httptest.NewRequest("GET", "/users", nil)
+	req := httptest.NewRequest("GET", "/users?page=2", nil)
 	req.Header.Add("Authorization", "bearer 12345")
 
-	targetURL := mockServer.URL + "/users"
-	response, err := Forward(targetURL, req)
+	response, err := Forward(mockServer.URL, req)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -77,8 +81,7 @@ func TestForward_POSTSuccess(t *testing.T){
 	req := httptest.NewRequest("POST", "/users", bodyReader)
 	req.Header.Add("Content-Type", "application/json")
 
-	targetURL := mockServer.URL + "/users"
-	Forward(targetURL, req)
+	Forward(mockServer.URL, req)
 }
 
 func TestForward_NetworkFailure(t *testing.T){

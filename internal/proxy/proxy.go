@@ -8,7 +8,14 @@ import (
 
 
 func Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
-	req, err := http.NewRequest(r.Method, upstreamURL, r.Body)
+
+	targetURL := upstreamURL + r.URL.Path 
+
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+
+	req, err := http.NewRequest(r.Method, targetURL, r.Body)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed create new request: %w", err)
@@ -28,7 +35,7 @@ func Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
 }
 
 func Relay(w http.ResponseWriter, resp *http.Response) {
-	resp.Body.Close()
+	defer resp.Body.Close()
 
 	for key, values := range resp.Header {
 		for _, value := range values {

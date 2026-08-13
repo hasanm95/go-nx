@@ -6,6 +6,7 @@ import (
 
 	"github.com/hasanm95/go-nx/internal/config"
 	"github.com/hasanm95/go-nx/internal/matcher"
+	"github.com/hasanm95/go-nx/internal/proxy"
 	"github.com/hasanm95/go-nx/internal/upstream"
 )
 
@@ -34,7 +35,12 @@ func NewHandler(cfg *config.Config, selectors map[string]func() string) http.Han
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "matched rule: %s, selected upstream: %s -> %s", match.Path, selectedID, upstreamURL)
+		response, err := proxy.Forward(upstreamURL, r)
+
+		if err != nil {
+			fmt.Sprintf("got error from upstream: %v", err)
+		}
+
+		proxy.Relay(w, response)
 	}
 }
