@@ -15,6 +15,8 @@ func TestForward_GETSuccess(t *testing.T){
 	type Resp struct {
 		Status  string `json:"status"`
 	}
+	proxy := NewProxy()
+
 	// 1. Create a MOCK server
 	mockServer := httptest.NewServer(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request)  {
 		if r.URL.Path != "/users" {
@@ -39,7 +41,7 @@ func TestForward_GETSuccess(t *testing.T){
 	req := httptest.NewRequest("GET", "/users?page=2", nil)
 	req.Header.Add("Authorization", "bearer 12345")
 
-	response, err := Forward(mockServer.URL, req)
+	response, err := proxy.Forward(mockServer.URL, req)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -62,6 +64,8 @@ func TestForward_GETSuccess(t *testing.T){
 }
 
 func TestForward_POSTSuccess(t *testing.T){
+	proxy := NewProxy()
+
 	// 1. Create a MOCK server
 	mockServer := httptest.NewServer(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request)  {
 
@@ -81,10 +85,12 @@ func TestForward_POSTSuccess(t *testing.T){
 	req := httptest.NewRequest("POST", "/users", bodyReader)
 	req.Header.Add("Content-Type", "application/json")
 
-	Forward(mockServer.URL, req)
+	proxy.Forward(mockServer.URL, req)
 }
 
 func TestForward_NetworkFailure(t *testing.T){
+	proxy := NewProxy()
+
 	// 1. Create a MOCK server
 	mockServer := httptest.NewServer(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request)  {
 
@@ -93,7 +99,7 @@ func TestForward_NetworkFailure(t *testing.T){
 	
 	req := httptest.NewRequest("GET", "/users", nil)
 	invalidURL := "http://this-domain-does-not-exist-at-all-12345.xyz"
-	response, err := Forward(invalidURL, req)
+	response, err := proxy.Forward(invalidURL, req)
 
 	if err == nil {
 		t.Fatal("expected an error due to network failure, but got nil")

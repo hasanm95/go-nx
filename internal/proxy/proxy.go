@@ -4,10 +4,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
+type Proxy struct {
+	Client *http.Client
+}
 
-func Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
+func NewProxy() *Proxy {
+	return &Proxy{
+		Client: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns: 100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout: 90 * time.Second,
+			},
+		},
+	}
+}
+
+func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
 
 	targetURL := upstreamURL + r.URL.Path 
 
@@ -27,9 +43,7 @@ func Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
 		}
 	}
 
-	client := &http.Client{}
-
-	response, err := client.Do(req)
+	response, err := p.Client.Do(req)
 
 	return response, err
 }
