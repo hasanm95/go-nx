@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -27,5 +28,14 @@ func Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
 }
 
 func Relay(w http.ResponseWriter, resp *http.Response) {
+	resp.Body.Close()
 
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }

@@ -100,3 +100,33 @@ func TestForward_NetworkFailure(t *testing.T){
 		t.Errorf("expected response to be nil on failure, got %v", response)
 	}
 }
+
+func TestRelay_Success(t *testing.T) {
+	// Create MOCK response writer
+	rec := httptest.NewRecorder()
+
+	// Create MOCK response
+	bodyBytes := []byte(`{"status":"success"}`)
+	mockResp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: make(http.Header),
+		Body: io.NopCloser(bytes.NewBuffer(bodyBytes)),
+	}
+	mockResp.Header.Set("Content-Type", "application/json")
+
+	// Call Relay
+	Relay(rec, mockResp)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected %d, go %d", http.StatusOK, rec.Code)
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("expected Content-Type 'application/json', got '%s'", contentType)
+	}
+
+	if rec.Body.String() != `{"status":"success"}` {
+		t.Errorf("expected body '{\"status\":\"success\"}', got '%s'", rec.Body.String())
+	}
+}
