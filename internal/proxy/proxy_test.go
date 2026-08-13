@@ -172,6 +172,10 @@ func TestForward_HopByHopHeaders(t *testing.T){
 		if r.Header.Get("X-Test-Header") != "hello" {
 			t.Errorf("expected X-Test-Header to be forwarded")
 		}
+
+		if r.Host != "example.com" {
+			t.Errorf("expected Host 'example.com', got %q", r.Host)
+		}
 	}))
 	defer mockServer.Close() 
 
@@ -179,6 +183,7 @@ func TestForward_HopByHopHeaders(t *testing.T){
 	req.Header.Add("Connection", "keep-alive, X-Internal")
 	req.Header.Add("X-Test-Header", "hello")
 	req.Header.Add("X-Internal", "secret")
+	req.Host = "example.com"
 
 	_, _ = proxy.Forward(mockServer.URL, req)
 }

@@ -84,6 +84,7 @@ func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, er
 	}
 
 	copyHeaders(req.Header, r.Header)
+	req.Host = r.Host
 
 	response, err := p.Client.Do(req)
 
