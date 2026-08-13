@@ -24,14 +24,13 @@ func NewProxy() *Proxy {
 }
 
 func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
-
 	targetURL := upstreamURL + r.URL.Path 
 
 	if r.URL.RawQuery != "" {
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	req, err := http.NewRequest(r.Method, targetURL, r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
 
 	if err != nil {
 		return nil, fmt.Errorf("failed create new request: %w", err)

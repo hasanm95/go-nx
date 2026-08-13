@@ -2,7 +2,9 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -109,6 +111,63 @@ func TestForward_NetworkFailure(t *testing.T){
 		t.Errorf("expected response to be nil on failure, got %v", response)
 	}
 }
+
+func TestForward_ContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	proxy := NewProxy()
+
+	requestReceived := make(chan struct{})
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func (w http.ResponseWriter, r *http.Request)  {
+		reqCtx := r.Context()
+		close(requestReceived)
+
+		<- reqCtx.Done()
+	}))
+	defer mockServer.Close() 
+
+	req := httptest.NewRequestWithContext(ctx, "GET", "/users", nil)
+
+	type ProxyResult struct {
+		res *http.Response
+		err error
+	}
+
+	ch := make(chan ProxyResult, 1)
+
+	go func() {
+		res, err := proxy.Forward(mockServer.URL, req)
+
+		ch <- ProxyResult{res: res, err: err}
+	}()
+
+	<-requestReceived
+	cancel()
+
+	result := <-ch
+
+	if result.err == nil {
+		t.Errorf("expected context canceled error, got none")
+	}
+
+	if result.err != nil {
+		if !errors.Is(result.err, context.Canceled){
+			t.Errorf("expected context canceled error, got %v", result.err)
+		}
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 func TestRelay_Success(t *testing.T) {
 	proxy := NewProxy()
