@@ -48,7 +48,7 @@ func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, er
 	return response, err
 }
 
-func Relay(w http.ResponseWriter, resp *http.Response) {
+func (p *Proxy) Relay(w http.ResponseWriter, resp *http.Response) {
 	defer resp.Body.Close()
 
 	for key, values := range resp.Header {

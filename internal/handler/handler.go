@@ -35,12 +35,14 @@ func NewHandler(cfg *config.Config, selectors map[string]func() string) http.Han
 			return
 		}
 
-		response, err := proxy.Forward(upstreamURL, r)
+		p := proxy.NewProxy()
+
+		response, err := p.Forward(upstreamURL, r)
 
 		if err != nil {
 			fmt.Sprintf("got error from upstream: %v", err)
 		}
 
-		proxy.Relay(w, response)
+		p.Relay(w, response)
 	}
 }

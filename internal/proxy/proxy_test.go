@@ -111,6 +111,8 @@ func TestForward_NetworkFailure(t *testing.T){
 }
 
 func TestRelay_Success(t *testing.T) {
+	proxy := NewProxy()
+
 	// Create MOCK response writer
 	rec := httptest.NewRecorder()
 
@@ -124,7 +126,7 @@ func TestRelay_Success(t *testing.T) {
 	mockResp.Header.Set("Content-Type", "application/json")
 
 	// Call Relay
-	Relay(rec, mockResp)
+	proxy.Relay(rec, mockResp)
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected %d, go %d", http.StatusOK, rec.Code)
