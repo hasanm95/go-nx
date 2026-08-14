@@ -45,7 +45,7 @@ func TestForward_GETSuccess(t *testing.T){
 	req := httptest.NewRequest("GET", "/users?page=2", nil)
 	req.Header.Add("Authorization", "bearer 12345")
 
-	response, err := proxy.Forward(mockServer.URL, req)
+	response, err := proxy.Forward(mockServer.URL, req, nil)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -89,7 +89,7 @@ func TestForward_POSTSuccess(t *testing.T){
 	req := httptest.NewRequest("POST", "/users", bodyReader)
 	req.Header.Add("Content-Type", "application/json")
 
-	proxy.Forward(mockServer.URL, req)
+	proxy.Forward(mockServer.URL, req, nil)
 }
 
 func TestForward_NetworkFailure(t *testing.T){
@@ -103,7 +103,7 @@ func TestForward_NetworkFailure(t *testing.T){
 	
 	req := httptest.NewRequest("GET", "/users", nil)
 	invalidURL := "http://this-domain-does-not-exist-at-all-12345.xyz"
-	response, err := proxy.Forward(invalidURL, req)
+	response, err := proxy.Forward(invalidURL, req, nil)
 
 	if err == nil {
 		t.Fatal("expected an error due to network failure, but got nil")
@@ -138,7 +138,7 @@ func TestForward_ContextCancellation(t *testing.T) {
 	ch := make(chan ProxyResult, 1)
 
 	go func() {
-		res, err := proxy.Forward(mockServer.URL, req)
+		res, err := proxy.Forward(mockServer.URL, req, nil)
 
 		ch <- ProxyResult{res: res, err: err}
 	}()
@@ -187,7 +187,7 @@ func TestForward_HopByHopHeaders(t *testing.T){
 	req.Header.Add("X-Internal", "secret")
 	req.Host = "example.com"
 
-	_, _ = proxy.Forward(mockServer.URL, req)
+	_, _ = proxy.Forward(mockServer.URL, req, nil)
 }
 
 func TestForward_XForwardedFor(t *testing.T) {
@@ -205,7 +205,7 @@ func TestForward_XForwardedFor(t *testing.T) {
 	req := httptest.NewRequest("GET", "/users", nil)
 	req.RemoteAddr = "192.168.1.20:54321"
 
-	_, err := proxy.Forward(mockServer.URL, req)
+	_, err := proxy.Forward(mockServer.URL, req, nil)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -230,7 +230,7 @@ func TestForward_XForwardedFor_Append(t *testing.T) {
 	req.RemoteAddr = "192.168.1.20:54321"
 	req.Header.Set("X-Forwarded-For", "10.0.0.5")
 
-	_, err := proxy.Forward(mockServer.URL, req)
+	_, err := proxy.Forward(mockServer.URL, req, nil)
 
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -251,7 +251,7 @@ func TestForward_XForwardedProto_HTTP(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/users", nil)
 
-	_, err := proxy.Forward(mockServer.URL, req)
+	_, err := proxy.Forward(mockServer.URL, req, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -272,7 +272,7 @@ func TestForward_XForwardedProto_HTTPS(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://example.com/users", nil)
 	req.TLS = &tls.ConnectionState{}
 
-	_, err := proxy.Forward(mockUpstream.URL, req)
+	_, err := proxy.Forward(mockUpstream.URL, req, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -293,7 +293,7 @@ func TestForward_XForwardedHost(t *testing.T) {
 	req := httptest.NewRequest("GET", "/users", nil)
 	req.Host = "example.com"
 
-	_, err := proxy.Forward(mockServer.URL, req)
+	_, err := proxy.Forward(mockServer.URL, req, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

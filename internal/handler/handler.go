@@ -34,7 +34,7 @@ func NewHandler(cfg *config.Config, selectors map[string]func() string, p *proxy
 			return
 		}
 
-		resp, err := p.Forward(upstreamURL, r)
+		resp, err := p.Forward(upstreamURL, r, cfg.Server.Headers)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to reach upstream: %v", err), http.StatusBadGateway)
 			return

@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/hasanm95/go-nx/internal/config"
 )
 
 type Proxy struct {
@@ -89,7 +91,7 @@ func addForwardedHeaders(req *http.Request, original *http.Request) {
 	req.Header.Set("X-Forwarded-Host", original.Host)
 }
 
-func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, error) {
+func (p *Proxy) Forward(upstreamURL string, r *http.Request, headers []config.HeaderConfig) (*http.Response, error) {
 	targetURL := strings.TrimSuffix(upstreamURL, "/") + r.URL.Path
 
 	if r.URL.RawQuery != "" {
@@ -112,6 +114,7 @@ func (p *Proxy) Forward(upstreamURL string, r *http.Request) (*http.Response, er
 	copyFilteredHeaders(req.Header, r.Header)
 	req.Host = r.Host
 	addForwardedHeaders(req, r)
+	ApplyConfiguredHeaders(req, headers, r)
 
 	return p.Client.Do(req)
 }
