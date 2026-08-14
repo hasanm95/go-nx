@@ -112,7 +112,7 @@ func (p *Proxy) Forward(upstreamURL string, r *http.Request, headers []config.He
 	req.ContentLength = r.ContentLength
 
 	copyFilteredHeaders(req.Header, r.Header)
-	req.Host = r.Host
+	// req.Host = r.Host
 	addForwardedHeaders(req, r)
 	ApplyConfiguredHeaders(req, headers, r)
 
